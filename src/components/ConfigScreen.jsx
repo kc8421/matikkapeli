@@ -1,13 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Play, 
-  HelpCircle, 
-  Sliders, 
-  Check, 
-  CheckCheck, 
   Sparkles, 
-  Settings2,
-  Award,
   AlertCircle
 } from 'lucide-react';
 import { OPERATION_CONFIG } from '../utils/mathGenerator';
@@ -18,7 +12,16 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
   const [customMax, setCustomMax] = useState(initialConfig.customMax || '');
   const [isCustomMax, setIsCustomMax] = useState(initialConfig.isCustomMax || false);
 
-  // Multiplication limits
+  // Greater than 10 options (applies to +, -, combo, x, ÷)
+  const [allowGreaterThan10, setAllowGreaterThan10] = useState(
+    initialConfig.allowGreaterThan10 || false
+  );
+  const [minOperandOver10, setMinOperandOver10] = useState(
+    initialConfig.minOperandOver10 || false
+  );
+  const [maxFactor, setMaxFactor] = useState(initialConfig.maxFactor || 20);
+
+  // Multiplication & Division limits
   const [tableStart, setTableStart] = useState(initialConfig.tableStart || 2);
   const [tableEnd, setTableEnd] = useState(initialConfig.tableEnd || 5);
   const [selectedTables, setSelectedTables] = useState(initialConfig.selectedTables || [2, 3, 4, 5]);
@@ -57,7 +60,7 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
     }
   };
 
-  // Quick range pills for addition/subtraction bounds (Finnish school standards)
+  // Quick range pills for addition/subtraction/combo bounds (Finnish school standards)
   const RANGE_PRESETS = [
     { label: '0–10', value: 10, grade: '1. luokan syksy' },
     { label: '0–20', value: 20, grade: '1. luokan kevät' },
@@ -65,11 +68,21 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
     { label: '0–100', value: 100, grade: '2. luokan kevät' },
   ];
 
+  const handleToggleGreaterThan10 = (checked) => {
+    setAllowGreaterThan10(checked);
+    if (checked && !isCustomMax && maxNumber <= 10) {
+      setMaxNumber(50);
+    }
+    if (!checked) {
+      setMinOperandOver10(false);
+    }
+  };
+
   // Specific multiplication tables toggle
   const toggleSpecificTable = (num) => {
     if (selectedTables.includes(num)) {
       if (selectedTables.length === 1) {
-        setValidationError('Valitse vähintään yksi kertotaulu!');
+        setValidationError('Valitse vähintään yksi taulu!');
         return;
       }
       setSelectedTables(selectedTables.filter((t) => t !== num));
@@ -87,9 +100,11 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
       return;
     }
 
-    const finalMax = isCustomMax
+    const rawMax = isCustomMax
       ? Math.max(5, parseInt(customMax) || 20)
       : maxNumber;
+
+    const finalMax = allowGreaterThan10 ? Math.max(25, rawMax) : rawMax;
 
     const config = {
       operations,
@@ -97,6 +112,9 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
       minNumber: 0,
       customMax: isCustomMax ? finalMax : '',
       isCustomMax,
+      allowGreaterThan10,
+      minOperandOver10: allowGreaterThan10 ? minOperandOver10 : false,
+      maxFactor: allowGreaterThan10 ? parseInt(maxFactor) || 20 : 10,
       tableStart: Math.min(tableStart, tableEnd),
       tableEnd: Math.max(tableStart, tableEnd),
       selectedTables: multiplicationSelectionMode === 'specific' ? selectedTables : [],
@@ -110,8 +128,16 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
     onStartTest(config);
   };
 
-  const hasMultiplicationOrDivision = operations.includes('multiplication') || operations.includes('division');
-  const hasAdditionOrSubtraction = operations.includes('addition') || operations.includes('subtraction');
+  const hasMultiplicationOrDivision =
+    operations.includes('multiplication') || operations.includes('division');
+  const hasAdditionOrSubtraction =
+    operations.includes('addition') ||
+    operations.includes('subtraction') ||
+    operations.includes('combo');
+
+  const availableTables = allowGreaterThan10
+    ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-4 sm:py-6">
@@ -145,7 +171,7 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
             <span className="text-xs text-slate-400 font-normal ml-auto">(Valitse yksi tai useampi)</span>
           </label>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 sm:gap-3">
             {Object.values(OPERATION_CONFIG).map((op) => {
               const isSelected = operations.includes(op.id);
               return (
@@ -169,7 +195,7 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
                     {op.nameFi.split(' ')[0]}
                   </span>
                   <span className="text-xs font-semibold opacity-75">
-                    {op.symbol}
+                    {op.id === 'combo' ? 'esim. 2+3−5' : op.symbol}
                   </span>
                 </button>
               );
@@ -177,15 +203,15 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
           </div>
         </div>
 
-        {/* SECTION 2: DIFFICULTY / LIMITS */}
+        {/* SECTION 2: DIFFICULTY / LIMITS FOR +, −, AND COMBO */}
         {hasAdditionOrSubtraction && (
           <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-md border-2 border-slate-100">
             <label className="block text-slate-800 font-black text-lg sm:text-xl mb-1 flex items-center gap-2">
               <span className="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm font-black">2</span>
-              <span>Yhteen- ja vähennyslaskun lukualue</span>
+              <span>Yhteen-, vähennys- ja yhdistelmälaskun lukualue</span>
             </label>
             <p className="text-xs sm:text-sm text-slate-500 mb-3">
-              Vastaukset ovat aina positiivisia (ei negatiivisia lukuja).
+              Vastaukset ja välivaiheet ovat aina vähintään 0 (ei negatiivisia lukuja).
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3">
@@ -198,6 +224,10 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
                     onClick={() => {
                       setMaxNumber(preset.value);
                       setIsCustomMax(false);
+                      if (preset.value <= 10) {
+                        setAllowGreaterThan10(false);
+                        setMinOperandOver10(false);
+                      }
                     }}
                     className={`p-3 rounded-2xl border-2 text-center transition-all ${
                       isSelected
@@ -213,7 +243,7 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
             </div>
 
             {/* Custom max option */}
-            <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+            <div className="flex items-center gap-3 pt-2 pb-3 border-t border-slate-100">
               <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
                 <input
                   type="checkbox"
@@ -236,6 +266,40 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
                 />
               )}
             </div>
+
+            {/* Greater than 10 toggle for +, -, and combo */}
+            <div className="p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200">
+              <label className="flex items-center justify-between cursor-pointer">
+                <div className="pr-3">
+                  <span className="font-bold text-emerald-950 text-sm sm:text-base block">
+                    Suuremmat luvut (yli 10)
+                  </span>
+                  <span className="text-xs text-emerald-800/80 block mt-0.5">
+                    Luo tehtäviä, joissa käytetään lukuja yli kymmenen.
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={allowGreaterThan10}
+                  onChange={(e) => handleToggleGreaterThan10(e.target.checked)}
+                  className="w-6 h-6 text-emerald-600 rounded-lg focus:ring-emerald-400 cursor-pointer"
+                />
+              </label>
+
+              {allowGreaterThan10 && (
+                <div className="mt-3 pt-2.5 border-t border-emerald-200/80">
+                  <label className="flex items-center gap-2.5 cursor-pointer text-xs sm:text-sm font-bold text-emerald-900">
+                    <input
+                      type="checkbox"
+                      checked={minOperandOver10}
+                      onChange={(e) => setMinOperandOver10(e.target.checked)}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-400"
+                    />
+                    <span>Kaikki laskettavat luvut yli 10 (esim. 14 + 12 tai 25 − 13)</span>
+                  </label>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -246,10 +310,10 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
               <span className="w-7 h-7 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-black">
                 {hasAdditionOrSubtraction ? '3' : '2'}
               </span>
-              <span>Kertotaulujen valinta</span>
+              <span>Kerto- ja jakolaskun luvut</span>
             </label>
             <p className="text-xs sm:text-sm text-slate-500 mb-3">
-              Valitse tietyt kertotaulut (1–10) tai haluamasi lukuväli.
+              Valitse harjoiteltavat taulut sekä lukualue (1–10 tai yli 10).
             </p>
 
             {/* Mode selector */}
@@ -279,49 +343,49 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
             </div>
 
             {multiplicationSelectionMode === 'range' ? (
-              <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-200">
+              <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-200 mb-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-600 mb-1">
-                      Mistä taulusta:
+                      Mistä taulusta / jakajasta:
                     </label>
                     <select
                       value={tableStart}
                       onChange={(e) => setTableStart(parseInt(e.target.value))}
                       className="w-full bg-white border-2 border-blue-300 font-black text-lg rounded-xl p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
                     >
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                      {availableTables.map((n) => (
                         <option key={n} value={n}>
-                          {n}. kertotaulu
+                          {n}. taulu
                         </option>
                       ))}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-600 mb-1">
-                      Mihin tauluun asti:
+                      Mihin tauluun / jakajaan asti:
                     </label>
                     <select
                       value={tableEnd}
                       onChange={(e) => setTableEnd(parseInt(e.target.value))}
                       className="w-full bg-white border-2 border-blue-300 font-black text-lg rounded-xl p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
                     >
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                      {availableTables.map((n) => (
                         <option key={n} value={n}>
-                          {n}. kertotaulu
+                          {n}. taulu
                         </option>
                       ))}
                     </select>
                   </div>
                 </div>
                 <p className="mt-3 text-xs sm:text-sm text-blue-700 font-bold text-center">
-                  Harjoitellaan tauluja: {Math.min(tableStart, tableEnd)} – {Math.max(tableStart, tableEnd)} (kertolaskut 1–10)
+                  Harjoitellaan tauluja: {Math.min(tableStart, tableEnd)} – {Math.max(tableStart, tableEnd)} (luvut 1–{allowGreaterThan10 ? maxFactor : 10})
                 </p>
               </div>
             ) : (
-              <div>
+              <div className="mb-4">
                 <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 mb-2">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                  {availableTables.map((num) => {
                     const isSelected = selectedTables.includes(num);
                     return (
                       <button
@@ -342,10 +406,10 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
                 <div className="flex gap-2 justify-end">
                   <button
                     type="button"
-                    onClick={() => setSelectedTables([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])}
+                    onClick={() => setSelectedTables(availableTables)}
                     className="text-xs font-bold text-blue-600 hover:underline"
                   >
-                    Valitse kaikki (1–10)
+                    Valitse kaikki
                   </button>
                   <span className="text-slate-300">|</span>
                   <button
@@ -358,6 +422,57 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
                 </div>
               </div>
             )}
+
+            {/* Greater than 10 toggle for Multiplication & Division */}
+            <div className="p-3.5 bg-purple-50/70 rounded-2xl border border-purple-200">
+              <label className="flex items-center justify-between cursor-pointer">
+                <div className="pr-3">
+                  <span className="font-bold text-purple-950 text-sm sm:text-base block">
+                    Suuremmat luvut (yli 10)
+                  </span>
+                  <span className="text-xs text-purple-800/80 block mt-0.5">
+                    Mahdollistaa yli 10 menevät kertoimet, jakajat ja jakolaskun vastaukset.
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={allowGreaterThan10}
+                  onChange={(e) => handleToggleGreaterThan10(e.target.checked)}
+                  className="w-6 h-6 text-purple-600 rounded-lg focus:ring-purple-400 cursor-pointer"
+                />
+              </label>
+
+              {allowGreaterThan10 && (
+                <div className="mt-3 pt-2.5 border-t border-purple-200/80 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs sm:text-sm font-bold text-purple-900">
+                      Suurin kerroin / jakolaskun tulos:
+                    </span>
+                    <select
+                      value={maxFactor}
+                      onChange={(e) => setMaxFactor(parseInt(e.target.value))}
+                      className="bg-white border-2 border-purple-300 rounded-xl px-3 py-1 text-sm font-black text-slate-800 focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="12">12 asti</option>
+                      <option value="15">15 asti</option>
+                      <option value="20">20 asti</option>
+                      <option value="30">30 asti</option>
+                      <option value="50">50 asti</option>
+                    </select>
+                  </div>
+
+                  <label className="flex items-center gap-2.5 cursor-pointer text-xs sm:text-sm font-bold text-purple-900">
+                    <input
+                      type="checkbox"
+                      checked={minOperandOver10}
+                      onChange={(e) => setMinOperandOver10(e.target.checked)}
+                      className="w-4 h-4 text-purple-600 rounded focus:ring-purple-400"
+                    />
+                    <span>Painota yli 10 kertoimia ja osamääriä (11–{maxFactor})</span>
+                  </label>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -503,4 +618,3 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
     </div>
   );
 }
-

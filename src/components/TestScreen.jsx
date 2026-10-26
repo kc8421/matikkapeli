@@ -268,10 +268,22 @@ export default function TestScreen({
           }`}
         >
           {/* Question Equation */}
-          <div className="flex items-center justify-center gap-3 sm:gap-4 font-black text-4xl sm:text-6xl text-slate-800 tracking-wide select-none">
+          <div
+            className={`flex flex-wrap items-center justify-center gap-2 sm:gap-3.5 font-black text-slate-800 tracking-wide select-none ${
+              currentQuestion.num3 !== null && currentQuestion.num3 !== undefined
+                ? 'text-3xl sm:text-5xl'
+                : 'text-4xl sm:text-6xl'
+            }`}
+          >
             <span className="font-mono">{currentQuestion.num1}</span>
             <span className="text-blue-500">{currentQuestion.symbol}</span>
             <span className="font-mono">{currentQuestion.num2}</span>
+            {currentQuestion.symbol2 && currentQuestion.num3 !== null && currentQuestion.num3 !== undefined && (
+              <>
+                <span className="text-pink-500">{currentQuestion.symbol2}</span>
+                <span className="font-mono">{currentQuestion.num3}</span>
+              </>
+            )}
             <span className="text-slate-400">=</span>
             
             {/* Answer Display Box */}

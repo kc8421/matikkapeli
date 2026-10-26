@@ -1,7 +1,7 @@
 // Math problem generator tailored for Finnish Elementary School (grades 1-2)
 
 /**
- * Supported operations: 'addition', 'subtraction', 'multiplication', 'division'
+ * Supported operations: 'addition', 'subtraction', 'combo', 'multiplication', 'division'
  */
 
 export const OPERATION_CONFIG = {
@@ -25,6 +25,16 @@ export const OPERATION_CONFIG = {
     badgeColor: 'bg-amber-100 text-amber-700',
     icon: '➖',
   },
+  combo: {
+    id: 'combo',
+    symbol: '+/−',
+    nameFi: 'Yhdistelmä (+ ja −)',
+    nameEn: 'Combo (+ and −)',
+    color: 'bg-pink-500 hover:bg-pink-600',
+    lightColor: 'bg-pink-50 text-pink-800 border-pink-300',
+    badgeColor: 'bg-pink-100 text-pink-700',
+    icon: '🔀',
+  },
   multiplication: {
     id: 'multiplication',
     symbol: '×',
@@ -47,6 +57,12 @@ export const OPERATION_CONFIG = {
   },
 };
 
+function randomInt(min, max) {
+  const low = Math.ceil(Math.min(min, max));
+  const high = Math.floor(Math.max(min, max));
+  return Math.floor(Math.random() * (high - low + 1)) + low;
+}
+
 /**
  * Generate a single question based on configuration
  */
@@ -55,6 +71,9 @@ export function generateQuestion(config) {
     operations = ['addition'],
     maxNumber = 20, // default range 0-20 (Finnish 1st grade spring)
     minNumber = 0,
+    allowGreaterThan10 = false,
+    minOperandOver10 = false,
+    maxFactor = 10, // for multiplication/division when allowGreaterThan10 is enabled
     tableStart = 2, // multiplication table start
     tableEnd = 5,   // multiplication table end
     specificTables = [], // optional explicit list [2, 3, 5]
@@ -65,40 +84,99 @@ export function generateQuestion(config) {
 
   let num1 = 0;
   let num2 = 0;
+  let num3 = null;
   let answer = 0;
   let symbol = '+';
+  let symbol2 = null;
+
+  const effectiveMax = allowGreaterThan10 ? Math.max(25, maxNumber) : maxNumber;
 
   if (op === 'addition') {
     symbol = '+';
-    // Ensure num1 + num2 <= maxNumber and >= minNumber
-    const totalMax = Math.max(minNumber + 1, maxNumber);
-    // Finnish 1st-2nd grade: start with sum up to max
-    const sum = Math.floor(Math.random() * (totalMax - minNumber + 1)) + minNumber;
-    num1 = Math.floor(Math.random() * (sum + 1));
-    num2 = sum - num1;
-    answer = sum;
+    if (allowGreaterThan10) {
+      if (minOperandOver10 && effectiveMax >= 24) {
+        // Both operands > 10
+        const maxA = Math.max(11, effectiveMax - 11);
+        num1 = randomInt(11, maxA);
+        num2 = randomInt(11, Math.max(11, effectiveMax - num1));
+        answer = num1 + num2;
+      } else {
+        // Ensure sum > 10 and at least one number can be > 10
+        const sum = randomInt(11, effectiveMax);
+        num1 = randomInt(1, sum - 1);
+        num2 = sum - num1;
+        answer = sum;
+      }
+    } else {
+      const totalMax = Math.max(minNumber + 1, effectiveMax);
+      const sum = randomInt(minNumber, totalMax);
+      num1 = randomInt(0, sum);
+      num2 = sum - num1;
+      answer = sum;
+    }
   } else if (op === 'subtraction') {
     symbol = '−';
-    // Ensure no negative answers (A >= B >= 0)
-    const upper = Math.max(minNumber + 1, maxNumber);
-    num1 = Math.floor(Math.random() * (upper - minNumber + 1)) + minNumber;
-    num2 = Math.floor(Math.random() * (num1 + 1)); // num2 <= num1 guarantees answer >= 0
-    answer = num1 - num2;
+    if (allowGreaterThan10) {
+      if (minOperandOver10 && effectiveMax >= 22) {
+        num1 = randomInt(12, effectiveMax);
+        num2 = randomInt(11, num1);
+        answer = num1 - num2;
+      } else {
+        num1 = randomInt(11, effectiveMax);
+        num2 = randomInt(1, num1);
+        answer = num1 - num2;
+      }
+    } else {
+      const upper = Math.max(minNumber + 1, effectiveMax);
+      num1 = randomInt(minNumber, upper);
+      num2 = randomInt(0, num1); // num2 <= num1 guarantees answer >= 0
+      answer = num1 - num2;
+    }
+  } else if (op === 'combo') {
+    // 3-number combination of addition and subtraction, e.g. 2 + 3 - 5 or 8 - 3 + 4
+    const pattern = Math.random() > 0.35 ? 'add_sub' : 'sub_add';
+    const minVal = allowGreaterThan10 && minOperandOver10 && effectiveMax >= 35 ? 11 : 1;
+
+    if (pattern === 'add_sub') {
+      // num1 + num2 − num3
+      symbol = '+';
+      symbol2 = '−';
+      const minSum = allowGreaterThan10 ? Math.max(12, minVal * 2) : 2;
+      const maxSum = Math.max(minSum, effectiveMax);
+      const intermediateSum = randomInt(minSum, maxSum);
+
+      num1 = randomInt(minVal, Math.max(minVal, intermediateSum - minVal));
+      num2 = intermediateSum - num1;
+      // Subtract num3 such that result >= 0 (allows e.g. 2 + 3 - 5 = 0)
+      num3 = randomInt(minVal, intermediateSum);
+      answer = intermediateSum - num3;
+    } else {
+      // num1 − num2 + num3 (ensure num1 - num2 >= 0 so intermediate step is never negative!)
+      symbol = '−';
+      symbol2 = '+';
+      const minStart = allowGreaterThan10 ? Math.max(11, minVal + 2) : 2;
+      num1 = randomInt(minStart, Math.max(minStart, effectiveMax));
+      num2 = randomInt(minVal, num1);
+      const intermediateDiff = num1 - num2;
+      const maxAdd = Math.max(minVal, effectiveMax - intermediateDiff);
+      num3 = randomInt(minVal, maxAdd);
+      answer = intermediateDiff + num3;
+    }
   } else if (op === 'multiplication') {
     symbol = '×';
-    // Granular multiplication: choose table from range or list
     let table = tableStart;
     if (specificTables && specificTables.length > 0) {
       table = specificTables[Math.floor(Math.random() * specificTables.length)];
     } else {
       const minT = Math.min(tableStart, tableEnd);
       const maxT = Math.max(tableStart, tableEnd);
-      table = Math.floor(Math.random() * (maxT - minT + 1)) + minT;
+      table = randomInt(minT, maxT);
     }
-    // Multiply by 1 to 10
-    const multiplier = Math.floor(Math.random() * 10) + 1;
-    
-    // Randomize order for pedagogical variety (e.g. 3x5 or 5x3)
+
+    const factorUpper = allowGreaterThan10 ? Math.max(12, maxFactor || 20) : 10;
+    const factorLower = allowGreaterThan10 && minOperandOver10 ? 11 : 1;
+    const multiplier = randomInt(factorLower, factorUpper);
+
     if (Math.random() > 0.5) {
       num1 = table;
       num2 = multiplier;
@@ -109,16 +187,19 @@ export function generateQuestion(config) {
     answer = num1 * num2;
   } else if (op === 'division') {
     symbol = '÷';
-    // Grade 1-2 friendly: exact integer division without remainders
+    // Exact integer division without remainders
     let divisor = tableStart;
     if (specificTables && specificTables.length > 0) {
       divisor = specificTables[Math.floor(Math.random() * specificTables.length)];
     } else {
       const minT = Math.max(1, Math.min(tableStart, tableEnd));
       const maxT = Math.max(minT, tableEnd);
-      divisor = Math.floor(Math.random() * (maxT - minT + 1)) + minT;
+      divisor = randomInt(minT, maxT);
     }
-    const quotient = Math.floor(Math.random() * 10) + 1; // clean quotient 1-10
+
+    const quotientUpper = allowGreaterThan10 ? Math.max(12, maxFactor || 20) : 10;
+    const quotientLower = allowGreaterThan10 && minOperandOver10 ? 11 : 1;
+    const quotient = randomInt(quotientLower, quotientUpper);
     const dividend = divisor * quotient;
 
     num1 = dividend;
@@ -126,14 +207,21 @@ export function generateQuestion(config) {
     answer = quotient;
   }
 
+  const displayString =
+    num3 !== null && symbol2
+      ? `${num1} ${symbol} ${num2} ${symbol2} ${num3}`
+      : `${num1} ${symbol} ${num2}`;
+
   return {
     id: `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
     operation: op,
     symbol,
+    symbol2,
     num1,
     num2,
+    num3,
     correctAnswer: answer,
-    displayString: `${num1} ${symbol} ${num2}`,
+    displayString,
   };
 }
 
@@ -149,8 +237,8 @@ export function generateTestQuestions(config, count = 10) {
   while (questions.length < count && attempts < maxAttempts) {
     attempts++;
     const q = generateQuestion(config);
-    const sig = `${q.operation}:${q.num1}:${q.symbol}:${q.num2}`;
-    
+    const sig = `${q.operation}:${q.displayString}`;
+
     // Avoid immediate duplicates when possible
     if (!signatures.has(sig) || attempts > count * 3) {
       signatures.add(sig);
@@ -182,4 +270,3 @@ export function checkAnswer(userInput, expectedAnswer) {
   // Account for floating point epsilon if ever decimals are generated
   return Math.abs(parsed - expectedAnswer) < 0.0001;
 }
-
