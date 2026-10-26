@@ -12,14 +12,28 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
   const [customMax, setCustomMax] = useState(initialConfig.customMax || '');
   const [isCustomMax, setIsCustomMax] = useState(initialConfig.isCustomMax || false);
 
-  // Greater than 10 options (applies to +, -, combo, x, ÷)
+  // Greater than 10 & Min/Max sum/outcome limiters
   const [allowGreaterThan10, setAllowGreaterThan10] = useState(
     initialConfig.allowGreaterThan10 || false
   );
-  const [minOperandOver10, setMinOperandOver10] = useState(
-    initialConfig.minOperandOver10 || false
+  const [minSumLimit, setMinSumLimit] = useState(
+    initialConfig.minSumLimit !== undefined ? initialConfig.minSumLimit : 0
   );
-  const [maxFactor, setMaxFactor] = useState(initialConfig.maxFactor || 20);
+  const [maxSumLimit, setMaxSumLimit] = useState(
+    initialConfig.maxSumLimit !== undefined ? initialConfig.maxSumLimit : 30
+  );
+  const [maxFactor, setMaxFactor] = useState(initialConfig.maxFactor || 15);
+
+  // Division decimal options (default false -> integers only!)
+  const [allowDecimalsInDivision, setAllowDecimalsInDivision] = useState(
+    initialConfig.allowDecimalsInDivision || false
+  );
+  const [divisionDecimalType, setDivisionDecimalType] = useState(
+    initialConfig.divisionDecimalType || 'halves'
+  ); // 'halves' | 'tenths'
+  const [divisionDecimalsOnly, setDivisionDecimalsOnly] = useState(
+    initialConfig.divisionDecimalsOnly || false
+  );
 
   // Multiplication & Division limits
   const [tableStart, setTableStart] = useState(initialConfig.tableStart || 2);
@@ -70,11 +84,13 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
 
   const handleToggleGreaterThan10 = (checked) => {
     setAllowGreaterThan10(checked);
-    if (checked && !isCustomMax && maxNumber <= 10) {
-      setMaxNumber(50);
-    }
-    if (!checked) {
-      setMinOperandOver10(false);
+    if (checked) {
+      if (!isCustomMax && maxNumber <= 10) {
+        setMaxNumber(30);
+      }
+      if ((parseInt(maxSumLimit) || 0) <= 10) {
+        setMaxSumLimit(30);
+      }
     }
   };
 
@@ -104,17 +120,30 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
       ? Math.max(5, parseInt(customMax) || 20)
       : maxNumber;
 
-    const finalMax = allowGreaterThan10 ? Math.max(25, rawMax) : rawMax;
+    // Validate min/max sum limits when allowGreaterThan10 is enabled
+    const parsedMinSum = Math.max(0, parseInt(minSumLimit) || 0);
+    const parsedMaxSum = Math.max(12, parseInt(maxSumLimit) || 30);
+
+    if (allowGreaterThan10 && parsedMinSum >= parsedMaxSum) {
+      setValidationError('Pienimmän tuloksen (Min) täytyy olla pienempi kuin suurimman tuloksen (Max)!');
+      return;
+    }
+
+    const finalMax = allowGreaterThan10 ? parsedMaxSum : rawMax;
 
     const config = {
       operations,
       maxNumber: finalMax,
       minNumber: 0,
-      customMax: isCustomMax ? finalMax : '',
+      customMax: isCustomMax ? rawMax : '',
       isCustomMax,
       allowGreaterThan10,
-      minOperandOver10: allowGreaterThan10 ? minOperandOver10 : false,
-      maxFactor: allowGreaterThan10 ? parseInt(maxFactor) || 20 : 10,
+      minSumLimit: parsedMinSum,
+      maxSumLimit: parsedMaxSum,
+      maxFactor: allowGreaterThan10 ? parseInt(maxFactor) || 15 : 10,
+      allowDecimalsInDivision: operations.includes('division') ? allowDecimalsInDivision : false,
+      divisionDecimalType,
+      divisionDecimalsOnly: allowDecimalsInDivision ? divisionDecimalsOnly : false,
       tableStart: Math.min(tableStart, tableEnd),
       tableEnd: Math.max(tableStart, tableEnd),
       selectedTables: multiplicationSelectionMode === 'specific' ? selectedTables : [],
@@ -130,6 +159,7 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
 
   const hasMultiplicationOrDivision =
     operations.includes('multiplication') || operations.includes('division');
+  const hasDivision = operations.includes('division');
   const hasAdditionOrSubtraction =
     operations.includes('addition') ||
     operations.includes('subtraction') ||
@@ -214,89 +244,144 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
               Vastaukset ja välivaiheet ovat aina vähintään 0 (ei negatiivisia lukuja).
             </p>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3">
-              {RANGE_PRESETS.map((preset) => {
-                const isSelected = !isCustomMax && maxNumber === preset.value;
-                return (
-                  <button
-                    key={preset.value}
-                    type="button"
-                    onClick={() => {
-                      setMaxNumber(preset.value);
-                      setIsCustomMax(false);
-                      if (preset.value <= 10) {
-                        setAllowGreaterThan10(false);
-                        setMinOperandOver10(false);
-                      }
-                    }}
-                    className={`p-3 rounded-2xl border-2 text-center transition-all ${
-                      isSelected
-                        ? 'bg-emerald-50 border-emerald-500 text-emerald-900 shadow-sm ring-2 ring-emerald-300 font-black'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 font-bold'
-                    }`}
-                  >
-                    <div className="text-xl sm:text-2xl font-black">{preset.label}</div>
-                    <div className="text-[11px] font-semibold text-emerald-700/80 mt-0.5">{preset.grade}</div>
-                  </button>
-                );
-              })}
-            </div>
+            {!allowGreaterThan10 && (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3">
+                  {RANGE_PRESETS.map((preset) => {
+                    const isSelected = !isCustomMax && maxNumber === preset.value;
+                    return (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        onClick={() => {
+                          setMaxNumber(preset.value);
+                          setIsCustomMax(false);
+                        }}
+                        className={`p-3 rounded-2xl border-2 text-center transition-all ${
+                          isSelected
+                            ? 'bg-emerald-50 border-emerald-500 text-emerald-900 shadow-sm ring-2 ring-emerald-300 font-black'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 font-bold'
+                        }`}
+                      >
+                        <div className="text-xl sm:text-2xl font-black">{preset.label}</div>
+                        <div className="text-[11px] font-semibold text-emerald-700/80 mt-0.5">{preset.grade}</div>
+                      </button>
+                    );
+                  })}
+                </div>
 
-            {/* Custom max option */}
-            <div className="flex items-center gap-3 pt-2 pb-3 border-t border-slate-100">
-              <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isCustomMax}
-                  onChange={(e) => setIsCustomMax(e.target.checked)}
-                  className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-400"
-                />
-                <span>Muu maksimiluku:</span>
-              </label>
-              {isCustomMax && (
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min="5"
-                  max="1000"
-                  value={customMax}
-                  onChange={(e) => setCustomMax(e.target.value)}
-                  placeholder="esim. 30"
-                  className="w-28 px-3 py-1.5 text-base font-bold border-2 border-emerald-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                />
-              )}
-            </div>
+                {/* Custom max option */}
+                <div className="flex items-center gap-3 pt-2 pb-3 border-t border-slate-100">
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isCustomMax}
+                      onChange={(e) => setIsCustomMax(e.target.checked)}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-400"
+                    />
+                    <span>Muu maksimiluku:</span>
+                  </label>
+                  {isCustomMax && (
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="5"
+                      max="1000"
+                      value={customMax}
+                      onChange={(e) => setCustomMax(e.target.value)}
+                      placeholder="esim. 30"
+                      className="w-28 px-3 py-1.5 text-base font-bold border-2 border-emerald-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    />
+                  )}
+                </div>
+              </>
+            )}
 
-            {/* Greater than 10 toggle for +, -, and combo */}
-            <div className="p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200">
+            {/* Greater than 10 toggle & Min/Max sum limiters for +, -, and combo */}
+            <div className="p-4 bg-emerald-50/70 rounded-2xl border border-emerald-200">
               <label className="flex items-center justify-between cursor-pointer">
                 <div className="pr-3">
                   <span className="font-bold text-emerald-950 text-sm sm:text-base block">
-                    Suuremmat luvut (yli 10)
+                    Suuremmat luvut (yli 10) & tuloksen rajat
                   </span>
                   <span className="text-xs text-emerald-800/80 block mt-0.5">
-                    Luo tehtäviä, joissa käytetään lukuja yli kymmenen.
+                    Aseta minimi- ja maksimirajat, jotta luvut eivät kasva liian suuriksi tai mene negatiivisiksi.
                   </span>
                 </div>
                 <input
                   type="checkbox"
                   checked={allowGreaterThan10}
                   onChange={(e) => handleToggleGreaterThan10(e.target.checked)}
-                  className="w-6 h-6 text-emerald-600 rounded-lg focus:ring-emerald-400 cursor-pointer"
+                  className="w-6 h-6 text-emerald-600 rounded-lg focus:ring-emerald-400 cursor-pointer shrink-0"
                 />
               </label>
 
               {allowGreaterThan10 && (
-                <div className="mt-3 pt-2.5 border-t border-emerald-200/80">
-                  <label className="flex items-center gap-2.5 cursor-pointer text-xs sm:text-sm font-bold text-emerald-900">
-                    <input
-                      type="checkbox"
-                      checked={minOperandOver10}
-                      onChange={(e) => setMinOperandOver10(e.target.checked)}
-                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-400"
-                    />
-                    <span>Kaikki laskettavat luvut yli 10 (esim. 14 + 12 tai 25 − 13)</span>
-                  </label>
+                <div className="mt-3.5 pt-3.5 border-t border-emerald-200/80 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="bg-white p-3 rounded-xl border border-emerald-200">
+                      <label className="block text-xs font-bold text-slate-600 mb-1">
+                        Pienin tulos / summa (Min ≥ 0):
+                      </label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="0"
+                        max="500"
+                        value={minSumLimit}
+                        onChange={(e) => setMinSumLimit(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full px-3 py-1.5 text-lg font-black border-2 border-emerald-300 rounded-xl text-slate-800 focus:outline-none focus:border-emerald-500"
+                      />
+                      <span className="text-[11px] text-slate-500 block mt-1">
+                        Estää negatiiviset ja liian pienet tulokset
+                      </span>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-xl border border-emerald-200">
+                      <label className="block text-xs font-bold text-slate-600 mb-1">
+                        Suurin tulos / summa (Max):
+                      </label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="12"
+                        max="1000"
+                        value={maxSumLimit}
+                        onChange={(e) => setMaxSumLimit(Math.max(12, parseInt(e.target.value) || 12))}
+                        className="w-full px-3 py-1.5 text-lg font-black border-2 border-emerald-300 rounded-xl text-slate-800 focus:outline-none focus:border-emerald-500"
+                      />
+                      <span className="text-[11px] text-slate-500 block mt-1">
+                        Rajoittaa maksimisummaa (ei liian isoja lukuja)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Quick presets for Min–Max limits */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="text-xs font-bold text-emerald-900">Pikavalinnat:</span>
+                    {[
+                      { label: '0 – 25', min: 0, max: 25 },
+                      { label: '10 – 30', min: 10, max: 30 },
+                      { label: '10 – 50', min: 10, max: 50 },
+                      { label: '20 – 100', min: 20, max: 100 },
+                    ].map((p) => (
+                      <button
+                        key={p.label}
+                        type="button"
+                        onClick={() => {
+                          setMinSumLimit(p.min);
+                          setMaxSumLimit(p.max);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
+                          minSumLimit === p.min && maxSumLimit === p.max
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                            : 'bg-white text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -305,19 +390,21 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
 
         {/* SECTION 3: MULTIPLICATION & DIVISION GRANULAR LIMITS */}
         {hasMultiplicationOrDivision && (
-          <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-md border-2 border-slate-100">
-            <label className="block text-slate-800 font-black text-lg sm:text-xl mb-1 flex items-center gap-2">
-              <span className="w-7 h-7 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-black">
-                {hasAdditionOrSubtraction ? '3' : '2'}
-              </span>
-              <span>Kerto- ja jakolaskun luvut</span>
-            </label>
-            <p className="text-xs sm:text-sm text-slate-500 mb-3">
-              Valitse harjoiteltavat taulut sekä lukualue (1–10 tai yli 10).
-            </p>
+          <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-md border-2 border-slate-100 space-y-4">
+            <div>
+              <label className="block text-slate-800 font-black text-lg sm:text-xl mb-1 flex items-center gap-2">
+                <span className="w-7 h-7 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-black">
+                  {hasAdditionOrSubtraction ? '3' : '2'}
+                </span>
+                <span>Kerto- ja jakolaskun asetukset</span>
+              </label>
+              <p className="text-xs sm:text-sm text-slate-500">
+                Valitse harjoiteltavat taulut sekä lukujen rajat.
+              </p>
+            </div>
 
             {/* Mode selector */}
-            <div className="flex gap-2 mb-4 bg-slate-100 p-1 rounded-2xl w-fit">
+            <div className="flex gap-2 bg-slate-100 p-1 rounded-2xl w-fit">
               <button
                 type="button"
                 onClick={() => setMultiplicationSelectionMode('range')}
@@ -343,7 +430,7 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
             </div>
 
             {multiplicationSelectionMode === 'range' ? (
-              <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-200 mb-4">
+              <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-200">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-600 mb-1">
@@ -379,11 +466,11 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
                   </div>
                 </div>
                 <p className="mt-3 text-xs sm:text-sm text-blue-700 font-bold text-center">
-                  Harjoitellaan tauluja: {Math.min(tableStart, tableEnd)} – {Math.max(tableStart, tableEnd)} (luvut 1–{allowGreaterThan10 ? maxFactor : 10})
+                  Harjoitellaan tauluja: {Math.min(tableStart, tableEnd)} – {Math.max(tableStart, tableEnd)} (kertoimet/tulokset 1–{allowGreaterThan10 ? maxFactor : 10})
                 </p>
               </div>
             ) : (
-              <div className="mb-4">
+              <div>
                 <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 mb-2">
                   {availableTables.map((num) => {
                     const isSelected = selectedTables.includes(num);
@@ -424,55 +511,114 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
             )}
 
             {/* Greater than 10 toggle for Multiplication & Division */}
-            <div className="p-3.5 bg-purple-50/70 rounded-2xl border border-purple-200">
+            <div className="p-3.5 bg-blue-50/60 rounded-2xl border border-blue-200">
               <label className="flex items-center justify-between cursor-pointer">
                 <div className="pr-3">
-                  <span className="font-bold text-purple-950 text-sm sm:text-base block">
+                  <span className="font-bold text-blue-950 text-sm sm:text-base block">
                     Suuremmat luvut (yli 10)
                   </span>
-                  <span className="text-xs text-purple-800/80 block mt-0.5">
-                    Mahdollistaa yli 10 menevät kertoimet, jakajat ja jakolaskun vastaukset.
+                  <span className="text-xs text-blue-800/80 block mt-0.5">
+                    Sallii yli 10 menevät kertoimet ja jakolaskun tulokset (rajoittimella).
                   </span>
                 </div>
                 <input
                   type="checkbox"
                   checked={allowGreaterThan10}
                   onChange={(e) => handleToggleGreaterThan10(e.target.checked)}
-                  className="w-6 h-6 text-purple-600 rounded-lg focus:ring-purple-400 cursor-pointer"
+                  className="w-6 h-6 text-blue-600 rounded-lg focus:ring-blue-400 cursor-pointer shrink-0"
                 />
               </label>
 
               {allowGreaterThan10 && (
-                <div className="mt-3 pt-2.5 border-t border-purple-200/80 space-y-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs sm:text-sm font-bold text-purple-900">
-                      Suurin kerroin / jakolaskun tulos:
-                    </span>
-                    <select
-                      value={maxFactor}
-                      onChange={(e) => setMaxFactor(parseInt(e.target.value))}
-                      className="bg-white border-2 border-purple-300 rounded-xl px-3 py-1 text-sm font-black text-slate-800 focus:outline-none focus:border-purple-500"
-                    >
-                      <option value="12">12 asti</option>
-                      <option value="15">15 asti</option>
-                      <option value="20">20 asti</option>
-                      <option value="30">30 asti</option>
-                      <option value="50">50 asti</option>
-                    </select>
-                  </div>
-
-                  <label className="flex items-center gap-2.5 cursor-pointer text-xs sm:text-sm font-bold text-purple-900">
-                    <input
-                      type="checkbox"
-                      checked={minOperandOver10}
-                      onChange={(e) => setMinOperandOver10(e.target.checked)}
-                      className="w-4 h-4 text-purple-600 rounded focus:ring-purple-400"
-                    />
-                    <span>Painota yli 10 kertoimia ja osamääriä (11–{maxFactor})</span>
-                  </label>
+                <div className="mt-3 pt-2.5 border-t border-blue-200/80 flex items-center justify-between gap-2">
+                  <span className="text-xs sm:text-sm font-bold text-blue-900">
+                    Suurin kerroin / jakolaskun vastaus (Max):
+                  </span>
+                  <select
+                    value={maxFactor}
+                    onChange={(e) => setMaxFactor(parseInt(e.target.value))}
+                    className="bg-white border-2 border-blue-300 rounded-xl px-3 py-1 text-sm font-black text-slate-800 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="12">12 asti</option>
+                    <option value="15">15 asti</option>
+                    <option value="20">20 asti</option>
+                    <option value="30">30 asti</option>
+                    <option value="50">50 asti</option>
+                  </select>
                 </div>
               )}
             </div>
+
+            {/* DIVISION DECIMAL OPTIONS (Only when division is selected; otherwise strictly integers!) */}
+            {hasDivision && (
+              <div className="p-3.5 bg-purple-50/70 rounded-2xl border border-purple-200">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="pr-3">
+                    <span className="font-bold text-purple-950 text-sm sm:text-base block">
+                      Desimaalivastaukset jakolaskussa (esim. 5 ÷ 2 = 2,5)
+                    </span>
+                    <span className="text-xs text-purple-800/80 block mt-0.5">
+                      {allowDecimalsInDivision
+                        ? 'Jakolaskuissa voi tulla tarkkoja desimaalilukuja.'
+                        : 'Pois päältä: jakolaskuissa tulee vain tasaisia kokonaislukuja.'}
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={allowDecimalsInDivision}
+                    onChange={(e) => setAllowDecimalsInDivision(e.target.checked)}
+                    className="w-6 h-6 text-purple-600 rounded-lg focus:ring-purple-400 cursor-pointer shrink-0"
+                  />
+                </label>
+
+                {allowDecimalsInDivision && (
+                  <div className="mt-3.5 pt-3 border-t border-purple-200/80 space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-purple-900 mb-1.5">
+                        Desimaalien tyyppi:
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDivisionDecimalType('halves')}
+                          className={`p-2.5 rounded-xl border text-left transition-all ${
+                            divisionDecimalType === 'halves'
+                              ? 'bg-purple-600 text-white border-purple-600 font-bold shadow-sm'
+                              : 'bg-white text-purple-900 border-purple-200 hover:bg-purple-100 font-semibold'
+                          }`}
+                        >
+                          <div className="text-xs sm:text-sm">Vain puolikkaat (,5)</div>
+                          <div className="text-[11px] opacity-80">Esim. 3 ÷ 2 = 1,5 tai 9 ÷ 2 = 4,5</div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setDivisionDecimalType('tenths')}
+                          className={`p-2.5 rounded-xl border text-left transition-all ${
+                            divisionDecimalType === 'tenths'
+                              ? 'bg-purple-600 text-white border-purple-600 font-bold shadow-sm'
+                              : 'bg-white text-purple-900 border-purple-200 hover:bg-purple-100 font-semibold'
+                          }`}
+                        >
+                          <div className="text-xs sm:text-sm">1 desimaalin tarkat luvut</div>
+                          <div className="text-[11px] opacity-80">Esim. ,2 • ,4 • ,5 • ,8 (jakajat 2, 5, 10)</div>
+                        </button>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2.5 cursor-pointer text-xs sm:text-sm font-bold text-purple-900">
+                      <input
+                        type="checkbox"
+                        checked={divisionDecimalsOnly}
+                        onChange={(e) => setDivisionDecimalsOnly(e.target.checked)}
+                        className="w-4 h-4 text-purple-600 rounded focus:ring-purple-400"
+                      />
+                      <span>Kysy jakolaskussa pelkästään desimaalilaskuja (ei kokonaislukuja)</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

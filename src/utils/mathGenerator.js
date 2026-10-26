@@ -64,19 +64,32 @@ function randomInt(min, max) {
 }
 
 /**
+ * Format a numeric value using Finnish decimal comma (e.g. 2.5 -> "2,5")
+ */
+export function formatFinnishNumber(num) {
+  if (num === null || num === undefined) return '';
+  return num.toString().replace('.', ',');
+}
+
+/**
  * Generate a single question based on configuration
  */
 export function generateQuestion(config) {
   const {
     operations = ['addition'],
-    maxNumber = 20, // default range 0-20 (Finnish 1st grade spring)
-    minNumber = 0,
+    maxNumber = 20, // Max sum / outcome ceiling
+    minNumber = 0,  // Min sum / outcome floor (always >= 0)
     allowGreaterThan10 = false,
-    minOperandOver10 = false,
+    minSumLimit = 10, // When allowGreaterThan10 is active: minimum sum/largest number
+    maxSumLimit = 30, // When allowGreaterThan10 is active: maximum sum/outcome limiter
     maxFactor = 10, // for multiplication/division when allowGreaterThan10 is enabled
     tableStart = 2, // multiplication table start
     tableEnd = 5,   // multiplication table end
     specificTables = [], // optional explicit list [2, 3, 5]
+    // Division decimal options (default false -> integers only)
+    allowDecimalsInDivision = false,
+    divisionDecimalType = 'halves', // 'halves' (,5) | 'tenths' (1 decimal e.g. ,2 ,4 ,5 ,8)
+    divisionDecimalsOnly = false, // true = only decimal answers, false = mix of integer & decimal
   } = config;
 
   // Pick an operation randomly from chosen operations
@@ -89,77 +102,75 @@ export function generateQuestion(config) {
   let symbol = '+';
   let symbol2 = null;
 
-  const effectiveMax = allowGreaterThan10 ? Math.max(25, maxNumber) : maxNumber;
+  // Determine safe non-negative min and max outcome bounds for +, −, and combo
+  const rawMin = allowGreaterThan10
+    ? Math.max(0, parseInt(minSumLimit) || 0)
+    : Math.max(0, parseInt(minNumber) || 0);
+  const rawMax = allowGreaterThan10
+    ? Math.max(11, parseInt(maxSumLimit) || maxNumber || 30)
+    : Math.max(5, parseInt(maxNumber) || 20);
+
+  const safeMinOutcome = Math.max(0, Math.min(rawMin, rawMax - 2));
+  const safeMaxOutcome = Math.max(safeMinOutcome + 2, rawMax);
 
   if (op === 'addition') {
     symbol = '+';
-    if (allowGreaterThan10) {
-      if (minOperandOver10 && effectiveMax >= 24) {
-        // Both operands > 10
-        const maxA = Math.max(11, effectiveMax - 11);
-        num1 = randomInt(11, maxA);
-        num2 = randomInt(11, Math.max(11, effectiveMax - num1));
-        answer = num1 + num2;
-      } else {
-        // Ensure sum > 10 and at least one number can be > 10
-        const sum = randomInt(11, effectiveMax);
-        num1 = randomInt(1, sum - 1);
-        num2 = sum - num1;
-        answer = sum;
-      }
-    } else {
-      const totalMax = Math.max(minNumber + 1, effectiveMax);
-      const sum = randomInt(minNumber, totalMax);
-      num1 = randomInt(0, sum);
-      num2 = sum - num1;
-      answer = sum;
-    }
+    // Outcome (sum) is strictly bounded between [safeMinOutcome, safeMaxOutcome]
+    const minTargetSum = allowGreaterThan10 ? Math.max(11, safeMinOutcome) : safeMinOutcome;
+    const maxTargetSum = Math.max(minTargetSum, safeMaxOutcome);
+    const sum = randomInt(minTargetSum, maxTargetSum);
+
+    num1 = randomInt(0, sum);
+    num2 = sum - num1;
+    answer = sum;
   } else if (op === 'subtraction') {
     symbol = '−';
-    if (allowGreaterThan10) {
-      if (minOperandOver10 && effectiveMax >= 22) {
-        num1 = randomInt(12, effectiveMax);
-        num2 = randomInt(11, num1);
-        answer = num1 - num2;
-      } else {
-        num1 = randomInt(11, effectiveMax);
-        num2 = randomInt(1, num1);
-        answer = num1 - num2;
-      }
-    } else {
-      const upper = Math.max(minNumber + 1, effectiveMax);
-      num1 = randomInt(minNumber, upper);
-      num2 = randomInt(0, num1); // num2 <= num1 guarantees answer >= 0
-      answer = num1 - num2;
-    }
+    // Minuend (starting number) is bounded by safeMaxOutcome so numbers never get too big,
+    // and result (num1 - num2) is >= safeMinOutcome >= 0 (never negative!)
+    const minStart = allowGreaterThan10 ? Math.max(11, safeMinOutcome + 1) : Math.max(1, safeMinOutcome);
+    const maxStart = Math.max(minStart, safeMaxOutcome);
+    num1 = randomInt(minStart, maxStart);
+
+    // Ensure answer = num1 - num2 >= safeMinOutcome (and >= 0)
+    const maxSubtrahend = Math.max(0, num1 - safeMinOutcome);
+    num2 = randomInt(0, maxSubtrahend);
+    answer = num1 - num2;
   } else if (op === 'combo') {
-    // 3-number combination of addition and subtraction, e.g. 2 + 3 - 5 or 8 - 3 + 4
-    const pattern = Math.random() > 0.35 ? 'add_sub' : 'sub_add';
-    const minVal = allowGreaterThan10 && minOperandOver10 && effectiveMax >= 35 ? 11 : 1;
+    // 3-number combination of addition and subtraction, e.g. 2 + 3 - 5 or 12 - 4 + 5
+    // Both intermediate step AND final answer are strictly kept within [0, safeMaxOutcome]
+    // and final answer is within [safeMinOutcome, safeMaxOutcome]
+    const pattern = Math.random() > 0.4 ? 'add_sub' : 'sub_add';
 
     if (pattern === 'add_sub') {
       // num1 + num2 − num3
       symbol = '+';
       symbol2 = '−';
-      const minSum = allowGreaterThan10 ? Math.max(12, minVal * 2) : 2;
-      const maxSum = Math.max(minSum, effectiveMax);
-      const intermediateSum = randomInt(minSum, maxSum);
+      const minInter = allowGreaterThan10 ? Math.max(11, safeMinOutcome + 1) : Math.max(2, safeMinOutcome + 1);
+      const maxInter = Math.max(minInter, safeMaxOutcome);
+      const intermediateSum = randomInt(minInter, maxInter);
 
-      num1 = randomInt(minVal, Math.max(minVal, intermediateSum - minVal));
+      num1 = randomInt(1, intermediateSum - 1);
       num2 = intermediateSum - num1;
-      // Subtract num3 such that result >= 0 (allows e.g. 2 + 3 - 5 = 0)
-      num3 = randomInt(minVal, intermediateSum);
+
+      // We want: safeMinOutcome <= intermediateSum - num3 <= safeMaxOutcome, with num3 >= 1
+      const maxNum3 = Math.max(1, intermediateSum - safeMinOutcome);
+      num3 = randomInt(1, maxNum3);
       answer = intermediateSum - num3;
     } else {
-      // num1 − num2 + num3 (ensure num1 - num2 >= 0 so intermediate step is never negative!)
+      // num1 − num2 + num3
+      // Keep intermediate (num1 - num2) >= 0 so child never encounters negative numbers mid-calculation!
       symbol = '−';
       symbol2 = '+';
-      const minStart = allowGreaterThan10 ? Math.max(11, minVal + 2) : 2;
-      num1 = randomInt(minStart, Math.max(minStart, effectiveMax));
-      num2 = randomInt(minVal, num1);
+      const minStart = allowGreaterThan10 ? 11 : 2;
+      const maxStart = Math.max(minStart, safeMaxOutcome);
+      num1 = randomInt(minStart, maxStart);
+      num2 = randomInt(1, num1); // guarantees intermediateDiff = num1 - num2 >= 0
       const intermediateDiff = num1 - num2;
-      const maxAdd = Math.max(minVal, effectiveMax - intermediateDiff);
-      num3 = randomInt(minVal, maxAdd);
+
+      // Ensure final answer = intermediateDiff + num3 is between [safeMinOutcome, safeMaxOutcome]
+      const minAdd = Math.max(1, safeMinOutcome - intermediateDiff);
+      const maxAdd = Math.max(minAdd, safeMaxOutcome - intermediateDiff);
+      num3 = randomInt(minAdd, maxAdd);
       answer = intermediateDiff + num3;
     }
   } else if (op === 'multiplication') {
@@ -173,9 +184,8 @@ export function generateQuestion(config) {
       table = randomInt(minT, maxT);
     }
 
-    const factorUpper = allowGreaterThan10 ? Math.max(12, maxFactor || 20) : 10;
-    const factorLower = allowGreaterThan10 && minOperandOver10 ? 11 : 1;
-    const multiplier = randomInt(factorLower, factorUpper);
+    const factorUpper = allowGreaterThan10 ? Math.max(11, maxFactor || 20) : 10;
+    const multiplier = randomInt(1, factorUpper);
 
     if (Math.random() > 0.5) {
       num1 = table;
@@ -187,24 +197,66 @@ export function generateQuestion(config) {
     answer = num1 * num2;
   } else if (op === 'division') {
     symbol = '÷';
-    // Exact integer division without remainders
-    let divisor = tableStart;
-    if (specificTables && specificTables.length > 0) {
-      divisor = specificTables[Math.floor(Math.random() * specificTables.length)];
+    const quotientUpper = allowGreaterThan10 ? Math.max(11, maxFactor || 20) : 10;
+
+    // Decide whether this question should produce a decimal answer or an integer answer
+    const useDecimal =
+      allowDecimalsInDivision && (divisionDecimalsOnly || Math.random() >= 0.45);
+
+    if (!useDecimal) {
+      // Exact integer division ONLY (zero remainder)
+      let divisor = tableStart;
+      if (specificTables && specificTables.length > 0) {
+        divisor = specificTables[Math.floor(Math.random() * specificTables.length)];
+      } else {
+        const minT = Math.max(1, Math.min(tableStart, tableEnd));
+        const maxT = Math.max(minT, tableEnd);
+        divisor = randomInt(minT, maxT);
+      }
+
+      const quotient = randomInt(1, quotientUpper);
+      const dividend = divisor * quotient;
+
+      num1 = dividend;
+      num2 = divisor;
+      answer = quotient;
     } else {
-      const minT = Math.max(1, Math.min(tableStart, tableEnd));
-      const maxT = Math.max(minT, tableEnd);
-      divisor = randomInt(minT, maxT);
+      // Clean decimal division (no infinite repeating decimals like 1/3!)
+      if (divisionDecimalType === 'halves') {
+        // Answers ending in ,5 (e.g. 3 ÷ 2 = 1,5; 9 ÷ 2 = 4,5; 6 ÷ 4 = 1,5; 15 ÷ 10 = 1,5)
+        const cleanDivisorsForHalves = [2, 4, 6, 8, 10];
+        const divisor =
+          cleanDivisorsForHalves[Math.floor(Math.random() * cleanDivisorsForHalves.length)];
+        const wholePart = randomInt(0, Math.max(1, quotientUpper - 1));
+        const targetAnswer = wholePart + 0.5;
+        const dividend = Math.round(targetAnswer * divisor);
+
+        num1 = dividend;
+        num2 = divisor;
+        answer = Number(targetAnswer.toFixed(1));
+      } else {
+        // 'tenths': clean 1-decimal answers (divisors 2, 5, 10 -> .1, .2, .4, .5, .6, .8, etc.)
+        const cleanDivisors = [2, 5, 10];
+        const divisor = cleanDivisors[Math.floor(Math.random() * cleanDivisors.length)];
+        const wholePart = randomInt(0, Math.max(1, quotientUpper - 1));
+
+        let fractionSteps = 1;
+        if (divisor === 2) {
+          fractionSteps = 1; // 0.5
+        } else if (divisor === 5) {
+          fractionSteps = randomInt(1, 4); // 0.2, 0.4, 0.6, 0.8
+        } else {
+          fractionSteps = randomInt(1, 9); // 0.1 .. 0.9
+        }
+
+        const dividend = wholePart * divisor + fractionSteps;
+        const targetAnswer = dividend / divisor;
+
+        num1 = dividend;
+        num2 = divisor;
+        answer = Number(targetAnswer.toFixed(1));
+      }
     }
-
-    const quotientUpper = allowGreaterThan10 ? Math.max(12, maxFactor || 20) : 10;
-    const quotientLower = allowGreaterThan10 && minOperandOver10 ? 11 : 1;
-    const quotient = randomInt(quotientLower, quotientUpper);
-    const dividend = divisor * quotient;
-
-    num1 = dividend;
-    num2 = divisor;
-    answer = quotient;
   }
 
   const displayString =
@@ -221,6 +273,7 @@ export function generateQuestion(config) {
     num2,
     num3,
     correctAnswer: answer,
+    formattedAnswer: formatFinnishNumber(answer),
     displayString,
   };
 }
@@ -256,7 +309,7 @@ export function generateTestQuestions(config, count = 10) {
 
 /**
  * Check if the child's input matches the expected answer.
- * Handles Finnish comma separator (e.g. "4,0" === 4, "5" === 5)
+ * Handles Finnish comma separator (e.g. "4,5" === 4.5, "5" === 5)
  */
 export function checkAnswer(userInput, expectedAnswer) {
   if (userInput === null || userInput === undefined || userInput.trim() === '') {
@@ -267,6 +320,6 @@ export function checkAnswer(userInput, expectedAnswer) {
   const parsed = parseFloat(normalized);
 
   if (isNaN(parsed)) return false;
-  // Account for floating point epsilon if ever decimals are generated
+  // Account for floating point epsilon when decimals are generated
   return Math.abs(parsed - expectedAnswer) < 0.0001;
 }

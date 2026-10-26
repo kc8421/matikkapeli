@@ -11,7 +11,7 @@ import {
   Star
 } from 'lucide-react';
 import Keypad from './Keypad';
-import { checkAnswer } from '../utils/mathGenerator';
+import { checkAnswer, formatFinnishNumber } from '../utils/mathGenerator';
 import { soundManager } from '../utils/sound';
 
 export default function TestScreen({
@@ -147,7 +147,7 @@ export default function TestScreen({
           {
             problem: currentQuestion.displayString,
             userAnswer: userInput,
-            correctAnswer: currentQuestion.correctAnswer,
+            correctAnswer: formatFinnishNumber(currentQuestion.correctAnswer),
             isCorrect: true,
             attempts: newAttemptCount,
             revealed: false,
@@ -174,7 +174,7 @@ export default function TestScreen({
             {
               problem: currentQuestion.displayString,
               userAnswer: userInput,
-              correctAnswer: currentQuestion.correctAnswer,
+              correctAnswer: formatFinnishNumber(currentQuestion.correctAnswer),
               isCorrect: false,
               attempts: newAttemptCount,
               revealed: true,
@@ -193,7 +193,7 @@ export default function TestScreen({
         {
           problem: currentQuestion.displayString,
           userAnswer: userInput,
-          correctAnswer: currentQuestion.correctAnswer,
+          correctAnswer: formatFinnishNumber(currentQuestion.correctAnswer),
           isCorrect,
           attempts: 1,
           revealed: false,
@@ -301,7 +301,7 @@ export default function TestScreen({
               }`}
             >
               {revealedAnswer ? (
-                currentQuestion.correctAnswer
+                formatFinnishNumber(currentQuestion.correctAnswer)
               ) : userInput ? (
                 userInput
               ) : (
@@ -347,7 +347,7 @@ export default function TestScreen({
               <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-100 text-amber-900 rounded-2xl font-bold text-sm sm:text-base border border-amber-300">
                 <HelpCircle className="w-5 h-5 text-amber-600 shrink-0" />
                 <span>
-                  Oikea vastaus on <strong>{currentQuestion.correctAnswer}</strong>. Paina "Seuraava" jatkaaksesi!
+                  Oikea vastaus on <strong>{formatFinnishNumber(currentQuestion.correctAnswer)}</strong>. Paina "Seuraava" jatkaaksesi!
                 </span>
               </div>
             )}
