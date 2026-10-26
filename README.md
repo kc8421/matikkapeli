@@ -134,5 +134,5 @@ In your GitHub repository, go to **Settings > Secrets and variables > Actions > 
 Push any commit to `main` (or create a pull request). The pipeline will:
 1. Checkout and build the client application (`npm run build`).
 2. Request an ephemeral OIDC token from GitHub.
-3. Authenticate to Azure via the User-Assigned Managed Identity (`azure/login@v2`).
+3. Authenticate to Azure via the User-Assigned Managed Identity (`azure/login@v3`).
 4. Fetch a temporary deployment token and deploy to Azure Static Web Apps.
