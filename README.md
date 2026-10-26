@@ -119,8 +119,8 @@ SWA_ID=$(az staticwebapp show --name "$SWA_NAME" --resource-group "$RG" --query 
 az role assignment create --assignee "$UAMI_CLIENT_ID" --role "Contributor" --scope "$SWA_ID"
 ```
 
-#### 2. Configure GitHub Repository Variables
-In your GitHub repository, go to **Settings > Secrets and variables > Actions > Variables** (these are non-sensitive variables, **no secrets needed**):
+#### 2. Configure GitHub Repository Secrets or Variables
+In your GitHub repository, go to **Settings > Secrets and variables > Actions**. You can add them under either **Secrets** or **Variables** (the workflow supports both via `${{ secrets.X || vars.X }}`):
 
 | Variable Name | Value | Description |
 | :--- | :--- | :--- |

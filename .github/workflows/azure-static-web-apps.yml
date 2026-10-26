@@ -38,9 +38,9 @@ jobs:
       - name: Log in to Azure via OIDC (User-Assigned Managed Identity)
         uses: azure/login@v3
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }} # Client ID of the User-Assigned Managed Identity
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Retrieve ephemeral SWA deployment token
         id: swa_token
@@ -48,8 +48,8 @@ jobs:
         with:
           inlineScript: |
             TOKEN=$(az staticwebapp secrets list \
-              --name "${{ vars.AZURE_SWA_NAME }}" \
-              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --name "${{ secrets.AZURE_SWA_NAME || vars.AZURE_SWA_NAME }}" \
+              --resource-group "${{ secrets.AZURE_RESOURCE_GROUP || vars.AZURE_RESOURCE_GROUP }}" \
               --query "properties.apiKey" -o tsv)
             echo "::add-mask::$TOKEN"
             echo "api_token=$TOKEN" >> "$GITHUB_OUTPUT"
@@ -71,9 +71,9 @@ jobs:
       - name: Log in to Azure via OIDC (User-Assigned Managed Identity)
         uses: azure/login@v3
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }} # Client ID of the User-Assigned Managed Identity
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Retrieve ephemeral SWA deployment token
         id: swa_token
@@ -81,8 +81,8 @@ jobs:
         with:
           inlineScript: |
             TOKEN=$(az staticwebapp secrets list \
-              --name "${{ vars.AZURE_SWA_NAME }}" \
-              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --name "${{ secrets.AZURE_SWA_NAME || vars.AZURE_SWA_NAME }}" \
+              --resource-group "${{ secrets.AZURE_RESOURCE_GROUP || vars.AZURE_RESOURCE_GROUP }}" \
               --query "properties.apiKey" -o tsv)
             echo "::add-mask::$TOKEN"
             echo "api_token=$TOKEN" >> "$GITHUB_OUTPUT"
@@ -92,4 +92,3 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ steps.swa_token.outputs.api_token }}
           action: "close"
-
