@@ -156,7 +156,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="w-full py-4 text-center text-xs font-semibold text-slate-400 select-none border-t border-slate-100 mt-auto">
-        <p>Matikkapeli 🎒 • Suunniteltu alakoulun 1.–2. luokkalaisille • 100% asiakaspuolen sovellus</p>
+        <p>Matikkapeli 🎒 • Suunniteltu alakoulun 1.–2. luokkalaisille</p>
       </footer>
     </div>
   );
