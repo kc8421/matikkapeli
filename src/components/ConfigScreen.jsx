@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Play, 
   Sparkles, 
@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { OPERATION_CONFIG } from '../utils/mathGenerator';
 
-export default function ConfigScreen({ initialConfig, onStartTest }) {
+export default function ConfigScreen({ initialConfig, onChangeConfig, onStartTest }) {
   const [operations, setOperations] = useState(initialConfig.operations || ['addition']);
   const [maxNumber, setMaxNumber] = useState(initialConfig.maxNumber || 20);
   const [customMax, setCustomMax] = useState(initialConfig.customMax || '');
@@ -38,7 +38,9 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
   // Multiplication & Division limits
   const [tableStart, setTableStart] = useState(initialConfig.tableStart || 2);
   const [tableEnd, setTableEnd] = useState(initialConfig.tableEnd || 5);
-  const [selectedTables, setSelectedTables] = useState(initialConfig.selectedTables || [2, 3, 4, 5]);
+  const [selectedTables, setSelectedTables] = useState(
+    initialConfig.selectedTables?.length > 0 ? initialConfig.selectedTables : [2, 3, 4, 5]
+  );
   const [multiplicationSelectionMode, setMultiplicationSelectionMode] = useState(
     initialConfig.multiplicationSelectionMode || 'range'
   ); // 'range' | 'specific'
@@ -58,6 +60,66 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
   );
 
   const [validationError, setValidationError] = useState('');
+
+  // Build normalized config object from current state
+  const buildCurrentConfig = () => {
+    const rawMax = isCustomMax
+      ? Math.max(5, parseInt(customMax) || 20)
+      : maxNumber;
+    const parsedMinSum = Math.max(0, parseInt(minSumLimit) || 0);
+    const parsedMaxSum = Math.max(12, parseInt(maxSumLimit) || 30);
+
+    return {
+      operations,
+      maxNumber: rawMax,
+      minNumber: 0,
+      customMax,
+      isCustomMax,
+      allowGreaterThan10,
+      minSumLimit: parsedMinSum,
+      maxSumLimit: parsedMaxSum,
+      maxFactor: parseInt(maxFactor) || 15,
+      allowDecimalsInDivision,
+      divisionDecimalType,
+      divisionDecimalsOnly,
+      tableStart: Math.min(tableStart, tableEnd),
+      tableEnd: Math.max(tableStart, tableEnd),
+      selectedTables,
+      specificTables: multiplicationSelectionMode === 'specific' ? selectedTables : [],
+      multiplicationSelectionMode,
+      questionCount: parseInt(questionCount) || 10,
+      feedbackMode,
+      enableAssistance,
+      maxFailedAttempts: parseInt(maxFailedAttempts) || 2,
+    };
+  };
+
+  // Automatically persist configuration changes to localStorage whenever any setting changes
+  useEffect(() => {
+    if (onChangeConfig) {
+      onChangeConfig(buildCurrentConfig());
+    }
+  }, [
+    operations,
+    maxNumber,
+    customMax,
+    isCustomMax,
+    allowGreaterThan10,
+    minSumLimit,
+    maxSumLimit,
+    maxFactor,
+    allowDecimalsInDivision,
+    divisionDecimalType,
+    divisionDecimalsOnly,
+    tableStart,
+    tableEnd,
+    selectedTables,
+    multiplicationSelectionMode,
+    questionCount,
+    feedbackMode,
+    enableAssistance,
+    maxFailedAttempts,
+  ]);
 
   // Toggle operations
   const toggleOperation = (opId) => {
@@ -116,11 +178,6 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
       return;
     }
 
-    const rawMax = isCustomMax
-      ? Math.max(5, parseInt(customMax) || 20)
-      : maxNumber;
-
-    // Validate min/max sum limits when allowGreaterThan10 is enabled
     const parsedMinSum = Math.max(0, parseInt(minSumLimit) || 0);
     const parsedMaxSum = Math.max(12, parseInt(maxSumLimit) || 30);
 
@@ -129,32 +186,7 @@ export default function ConfigScreen({ initialConfig, onStartTest }) {
       return;
     }
 
-    const finalMax = allowGreaterThan10 ? parsedMaxSum : rawMax;
-
-    const config = {
-      operations,
-      maxNumber: finalMax,
-      minNumber: 0,
-      customMax: isCustomMax ? rawMax : '',
-      isCustomMax,
-      allowGreaterThan10,
-      minSumLimit: parsedMinSum,
-      maxSumLimit: parsedMaxSum,
-      maxFactor: allowGreaterThan10 ? parseInt(maxFactor) || 15 : 10,
-      allowDecimalsInDivision: operations.includes('division') ? allowDecimalsInDivision : false,
-      divisionDecimalType,
-      divisionDecimalsOnly: allowDecimalsInDivision ? divisionDecimalsOnly : false,
-      tableStart: Math.min(tableStart, tableEnd),
-      tableEnd: Math.max(tableStart, tableEnd),
-      selectedTables: multiplicationSelectionMode === 'specific' ? selectedTables : [],
-      multiplicationSelectionMode,
-      questionCount: parseInt(questionCount) || 10,
-      feedbackMode,
-      enableAssistance: feedbackMode === 'immediate' ? enableAssistance : false,
-      maxFailedAttempts: parseInt(maxFailedAttempts) || 2,
-    };
-
-    onStartTest(config);
+    onStartTest(buildCurrentConfig());
   };
 
   const hasMultiplicationOrDivision =

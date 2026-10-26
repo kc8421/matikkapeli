@@ -39,7 +39,10 @@ const DEFAULT_CONFIG = {
 
 export default function App() {
   const [view, setView] = useState('config'); // 'config' | 'test' | 'results' | 'reports'
-  const [config, setConfig] = useState(() => getLastConfig() || DEFAULT_CONFIG);
+  const [config, setConfig] = useState(() => ({
+    ...DEFAULT_CONFIG,
+    ...(getLastConfig() || {}),
+  }));
   const [questions, setQuestions] = useState([]);
   const [lastSessionResult, setLastSessionResult] = useState(null);
   const [sessions, setSessions] = useState([]);
@@ -128,6 +131,10 @@ export default function App() {
         {view === 'config' && (
           <ConfigScreen
             initialConfig={config}
+            onChangeConfig={(updated) => {
+              setConfig(updated);
+              saveLastConfig(updated);
+            }}
             onStartTest={handleStartTest}
           />
         )}
